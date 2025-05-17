@@ -212,6 +212,17 @@ document.addEventListener("usernameUpdated", (event) => {
 document.addEventListener("DOMContentLoaded", () => {
   // Initial update of the score display
   updateScore();
+
+  // Add event listener to play SecretSound when BlueStandalone.png is clicked
+  const separatorImage = document.querySelector(".control-separator");
+  const secretSound = new Audio("audio/SecretSound.mp3");
+  secretSound.volume = 0.3; // Set SecretSound volume to 30%
+
+  if (separatorImage) {
+    separatorImage.addEventListener("click", () => {
+      secretSound.play();
+    });
+  }
 });
 
 // ─── Food Generation ─────────────────────────────────────────────────────────
