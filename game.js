@@ -326,6 +326,15 @@ function gameLoop() {
 }
 
 function handleKeyPress(e) {
+  // Handle Enter key for game restart when modal is shown
+  if (e.code === "Enter" && !gameRunning && modal.classList.contains("show")) {
+    if (canCloseModal) {
+      modal.classList.remove("show");
+      initGame();
+    }
+    return;
+  }
+
   // Handle spacebar for pause
   if (e.code === "Space" && gameStarted && gameRunning) {
     e.preventDefault();
@@ -393,29 +402,68 @@ function handleKeyPress(e) {
 async function gameOver() {
   gameRunning = false;
   clearInterval(gameInterval);
+
+  // Clear any existing messages in the modal
+  const modalContent = modal.querySelector(".modal-content");
+  while (modalContent.children.length > 1) {
+    // Keep only the h2 "Game Over"
+    modalContent.removeChild(modalContent.lastChild);
+  }
+
+  // Add the final score message
   finalScoreElement.textContent = `You created ${score} pots of honey!`;
+  modalContent.appendChild(finalScoreElement);
   canCloseModal = false;
 
   // Handle audio
-  backgroundMusic.pause(); // Stop background music
-  backgroundMusic.currentTime = 0; // Reset music to beginning
-  playGameOverSound(); // Use the new function instead of direct play
+  backgroundMusic.pause();
+  backgroundMusic.currentTime = 0;
+  playGameOverSound();
 
   // Send final score to backend
   const response = await submitScore(score);
   console.log("Score submission response:", JSON.stringify(response, null, 2));
 
-  // Get global scores to determine rank
   try {
-    const token = localStorage.getItem("token");
-    const headers = {};
+    const csrfToken = getCookie("CSRF-TOKEN");
 
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
+    // Get personal scores to check if this is highest
+    const personalResponse = await fetch(`${API_BASE}/scores/personal`, {
+      credentials: "include",
+      headers: {
+        "X-CSRF-Token": csrfToken,
+      },
+    });
+
+    if (personalResponse.ok) {
+      const personalScores = await personalResponse.json();
+      console.log("Personal scores:", personalScores);
+
+      if (personalScores.length >= 3) {
+        // Filter out the current score (using the response id) and find the highest previous score
+        const previousScores = personalScores.filter((s) => s.id !== response.id);
+        const highestPreviousScore = Math.max(...previousScores.map((s) => s.value));
+        console.log("Highest previous score:", highestPreviousScore);
+        console.log("Current score:", score);
+
+        // Check if current score is greater than the highest previous score
+        if (score > highestPreviousScore) {
+          const highScoreMessage = document.createElement("p");
+          highScoreMessage.textContent = "That's your highest score ever!";
+          highScoreMessage.style.color = "#2e7d32"; // Success green color
+          highScoreMessage.style.marginTop = "1rem";
+          highScoreMessage.style.fontWeight = "600";
+          modalContent.appendChild(highScoreMessage);
+        }
+      }
     }
 
+    // Get global scores to determine rank
     const globalResponse = await fetch(`${API_BASE}/scores/global`, {
-      headers: headers,
+      credentials: "include",
+      headers: {
+        "X-CSRF-Token": csrfToken,
+      },
     });
 
     if (globalResponse.ok) {
@@ -424,8 +472,6 @@ async function gameOver() {
       const currentScoreId = response.id;
       const rank = globalScores.findIndex((s) => s.id === currentScoreId) + 1;
 
-      console.log("Current score rank:", rank);
-
       if (rank > 0 && rank <= 6) {
         // Create and add the rank message
         const rankMessage = document.createElement("p");
@@ -433,13 +479,42 @@ async function gameOver() {
         rankMessage.style.color = "#2e7d32"; // Success green color
         rankMessage.style.marginTop = "1rem";
         rankMessage.style.fontWeight = "600";
-        finalScoreElement.insertAdjacentElement("afterend", rankMessage);
+        modalContent.appendChild(rankMessage);
       }
     }
   } catch (error) {
-    console.error("Error fetching global scores:", error);
+    console.error("Error fetching scores:", error);
   }
 
+  // Add the buttons container
+  const modalButtons = document.createElement("div");
+  modalButtons.className = "modal-buttons";
+
+  // Create Play Again button
+  const playAgainButton = document.createElement("button");
+  playAgainButton.textContent = "Play Again";
+  playAgainButton.addEventListener("click", () => {
+    if (canCloseModal) {
+      modal.classList.remove("show");
+      initGame();
+    }
+  });
+
+  // Create Close button
+  const closeButton = document.createElement("button");
+  closeButton.textContent = "Close";
+  closeButton.addEventListener("click", () => {
+    if (canCloseModal) {
+      modal.classList.remove("show");
+    }
+  });
+
+  // Add buttons to container
+  modalButtons.appendChild(playAgainButton);
+  modalButtons.appendChild(closeButton);
+  modalContent.appendChild(modalButtons);
+
+  // Show the modal
   modal.classList.add("show");
 
   // Allow modal to be closed after 2 seconds
@@ -461,8 +536,8 @@ function closeModal(shouldRestart = false) {
 // ─── Event Listeners & Initial Draw ────────────────────────────────────────
 
 document.addEventListener("keydown", handleKeyPress);
-closeModalButton.addEventListener("click", () => closeModal(true));
-document.getElementById("closeGameOverModal").addEventListener("click", () => closeModal(false));
+document.getElementById("closeModal")?.removeEventListener("click", () => closeModal(true));
+document.getElementById("closeGameOverModal")?.removeEventListener("click", () => closeModal(false));
 
 // Instructions modal handlers
 const instructionsModal = document.getElementById("instructionsModal");

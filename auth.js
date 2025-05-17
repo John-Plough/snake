@@ -57,6 +57,7 @@ function showSignup() {
 function showGame() {
   document.getElementById("splashContainer").classList.add("hidden");
   gameContainer.classList.remove("hidden");
+  document.querySelector(".main-footer").classList.add("game-active");
 }
 
 // Helper function for API calls
@@ -223,11 +224,15 @@ const populateScoresTable = (scores) => {
   const tbody = scoresTable.querySelector("tbody");
   tbody.innerHTML = "";
 
+  // Get current username for comparison
+  const currentUsername = document.querySelector(".username").textContent.trim();
+
   scores.forEach((score, index) => {
     const row = document.createElement("tr");
+    const isCurrentUser = score.username === currentUsername;
     row.innerHTML = `
       <td>${index + 1}</td>
-      <td>${score.username}</td>
+      <td style="${isCurrentUser ? "color: #2e7d32;" : ""}">${score.username}</td>
       <td>${score.value}</td>
       <td>${formatDate(score.created_at)}</td>
     `;
@@ -319,10 +324,13 @@ async function checkAuthStatus() {
     } else if (response.status === 401) {
       // User is not logged in - this is normal, just update UI accordingly
       updateHeaderState(null);
-      // Don't show game, stay on splash screen
+      // Don't show game, stay on splash screen and ensure footer is blue
+      document.querySelector(".main-footer").classList.remove("game-active");
     } else {
       console.error("Unexpected error checking auth status:", response.status);
       updateHeaderState(null);
+      // Ensure footer is blue in error case as well
+      document.querySelector(".main-footer").classList.remove("game-active");
     }
   } catch (error) {
     // Only log network-level errors
@@ -330,6 +338,8 @@ async function checkAuthStatus() {
       console.error("Error checking auth status:", error);
     }
     updateHeaderState(null);
+    // Ensure footer is blue in error case
+    document.querySelector(".main-footer").classList.remove("game-active");
   }
 }
 
